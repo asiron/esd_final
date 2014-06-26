@@ -18,56 +18,68 @@ CPU ARM
   /* Definition of application mode */
   APPMODE appmode1{}; 
 
+  EVENT PlaceHolderEvent {
+    MASK = AUTO;
+  };
+
   TASK SonarSensorTask
   {
     AUTOSTART = TRUE
     {
       APPMODE = appmode1;
     };
-    PRIORITY = 9;
+    PRIORITY = 5;
     ACTIVATION = 1;
     SCHEDULE = FULL;
     STACKSIZE = 512;
+    MESSAGE = SonarSensorValueMsgSendForDataValidationTask;
+    MESSAGE = SonarSensorValueMsgSendForDataProcessingTask;
   }; 
 
   TASK DataProcessingTask
   {
     AUTOSTART = FALSE;
-    PRIORITY = 10;
+    PRIORITY = 2;
     ACTIVATION = 1;
     SCHEDULE = FULL;
     STACKSIZE = 512;
-    MESSAGE = MotorCtrMsgRcv;
+    MESSAGE = SonarSensorValueMsgReceiveForDataProcessingTask;
+    MESSAGE = DataValidationResultMsgReceive;
+    MESSAGE = MotorCommandMsgSendForOutputProcessingTask;
+    EVENT = PlaceHolderEvent;
   };
 
   TASK DataValidationTask
   {
     AUTOSTART = FALSE;
-    PRIORITY = 10;
+    PRIORITY = 3;
     ACTIVATION = 1;
     SCHEDULE = FULL;
     STACKSIZE = 512;
-    MESSAGE = MotorCtrMsgRcv;
+    MESSAGE = SonarSensorValueMsgReceiveForDataValidationTask;
+    MESSAGE = DataValidationResultMsgSend;
   };
 
   TASK OutputProcessingTask
   {
     AUTOSTART = FALSE;
-    PRIORITY = 10;
+    PRIORITY = 4;
     ACTIVATION = 1;
     SCHEDULE = FULL;
     STACKSIZE = 512;
-    //MESSAGE = MotorCtrMsgRcv;
+    MESSAGE = MotorCommandMsgReceiveForOutputProcessingTask;
+    MESSAGE = MotorCommandMsgSendForMonitorTask;
   };
 
   TASK MonitorTask
   {
     AUTOSTART = FALSE;
-    PRIORITY = 10;
+    PRIORITY = 6;
     ACTIVATION = 1;
     SCHEDULE = FULL;
     STACKSIZE = 512;
-    //MESSAGE = MotorCtrMsgRcv;
+    MESSAGE = MotorCommandMsgReceiveForMonitorTask;
+    MESSAGE = MotorSensorValuesMsgReceive;
   };
 
   TASK MotorSensorTask
@@ -80,6 +92,7 @@ CPU ARM
     ACTIVATION = 1;
     SCHEDULE = FULL;
     STACKSIZE = 512;
+    MESSAGE = MotorSensorValuesMsgSend;
   }; 
 
   TASK LCDTask
@@ -88,7 +101,7 @@ CPU ARM
     {
       APPMODE = appmode1;
     };
-    PRIORITY = 5;
+    PRIORITY = 1;
     ACTIVATION = 1;
     SCHEDULE = FULL;
     STACKSIZE = 512;
@@ -109,7 +122,7 @@ CPU ARM
       that we are working with the same set of data
     - sent to Data Processing Task and Data Validation Task
   */
-  MESSAGE SonarSensorValueMsgSend
+  MESSAGE SonarSensorValueMsgSendForDataProcessingTask
   {
     MESSAGEPROPERTY = SEND_STATIC_INTERNAL {
 	    CDATATYPE = "SONAR_SENSOR_MSG";
@@ -119,7 +132,7 @@ CPU ARM
   MESSAGE SonarSensorValueMsgReceiveForDataProcessingTask
   {
     MESSAGEPROPERTY = RECEIVE_UNQUEUED_INTERNAL {
-  	 SENDINGMESSAGE = SonarSensorValueMsgSnd;
+  	 SENDINGMESSAGE = SonarSensorValueMsgSendForDataProcessingTask;
   	 FILTER = ALWAYS;
     };
       
@@ -128,13 +141,21 @@ CPU ARM
     };
   };
 
+  MESSAGE SonarSensorValueMsgSendForDataValidationTask
+  {
+    MESSAGEPROPERTY = SEND_STATIC_INTERNAL {
+      CDATATYPE = "SONAR_SENSOR_MSG";
+    };
+  };
+
   MESSAGE SonarSensorValueMsgReceiveForDataValidationTask
   {
     MESSAGEPROPERTY = RECEIVE_UNQUEUED_INTERNAL {
-     SENDINGMESSAGE = SonarSensorValueMsgSnd;
+     SENDINGMESSAGE = SonarSensorValueMsgSendForDataValidationTask;
      FILTER = ALWAYS;
     };
-      
+   
+
     NOTIFICATION = ACTIVATETASK {
      TASK = DataValidationTask;
     };
@@ -147,7 +168,7 @@ CPU ARM
     - sent to Monitor Task from Output Processing Task
   */
 
-  MESSAGE MotorCommandMsgSend
+  MESSAGE MotorCommandMsgSendForOutputProcessingTask
   {
     MESSAGEPROPERTY = SEND_STATIC_INTERNAL {
       CDATATYPE = "MOTOR_COMMAND_MSG";
@@ -157,7 +178,7 @@ CPU ARM
   MESSAGE MotorCommandMsgReceiveForOutputProcessingTask
   {
     MESSAGEPROPERTY = RECEIVE_UNQUEUED_INTERNAL {
-     SENDINGMESSAGE = MotorCommandMsgSend;
+     SENDINGMESSAGE = MotorCommandMsgSendForOutputProcessingTask;
      FILTER = ALWAYS;
     };
       
@@ -166,16 +187,24 @@ CPU ARM
     };
   };
 
+  MESSAGE MotorCommandMsgSendForMonitorTask
+  {
+    MESSAGEPROPERTY = SEND_STATIC_INTERNAL {
+      CDATATYPE = "MOTOR_COMMAND_MSG";
+    };
+  };
+
   MESSAGE MotorCommandMsgReceiveForMonitorTask
   {
     MESSAGEPROPERTY = RECEIVE_UNQUEUED_INTERNAL {
-     SENDINGMESSAGE = MotorCommandMsgSend;
+     SENDINGMESSAGE = MotorCommandMsgSendForMonitorTask;
      FILTER = ALWAYS;
     };
-      
+    
     NOTIFICATION = ACTIVATETASK {
      TASK = MonitorTask;
     };
+    
   };
 
   /* Data Validation Message
@@ -198,14 +227,20 @@ CPU ARM
      SENDINGMESSAGE = DataValidationResultMsgSend;
      FILTER = ALWAYS;
     };
-      
-    NOTIFICATION = ACTIVATETASK {
+          
+    NOTIFICATION = SETEVENT {
+      EVENT = PlaceHolderEvent;
+      TASK  = DataProcessingTask;
+    };
+
+    /*NOTIFICATION = ACTIVATETASK {
      TASK = DataProcessingTask;
     };
+    */
   };
     
   /* Motor Sensor Message
-   - contains values of motors' revolutions
+   - contains values of motors revolutions
    - sent to Monitor Task
   */
 

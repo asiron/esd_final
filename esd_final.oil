@@ -18,7 +18,7 @@ CPU ARM
   /* Definition of application mode */
   APPMODE appmode1{}; 
 
-  EVENT PlaceHolderEvent {
+  EVENT DummyEvent {
     MASK = AUTO;
   };
 
@@ -28,7 +28,7 @@ CPU ARM
     {
       APPMODE = appmode1;
     };
-    PRIORITY = 5;
+    PRIORITY = 6;
     ACTIVATION = 1;
     SCHEDULE = FULL;
     STACKSIZE = 512;
@@ -39,20 +39,20 @@ CPU ARM
   TASK DataProcessingTask
   {
     AUTOSTART = FALSE;
-    PRIORITY = 2;
+    PRIORITY = 3;
     ACTIVATION = 1;
     SCHEDULE = FULL;
     STACKSIZE = 512;
     MESSAGE = SonarSensorValueMsgReceiveForDataProcessingTask;
     MESSAGE = DataValidationResultMsgReceive;
     MESSAGE = MotorCommandMsgSendForOutputProcessingTask;
-    EVENT = PlaceHolderEvent;
+    EVENT = DummyEvent;
   };
 
   TASK DataValidationTask
   {
     AUTOSTART = FALSE;
-    PRIORITY = 3;
+    PRIORITY = 4;
     ACTIVATION = 1;
     SCHEDULE = FULL;
     STACKSIZE = 512;
@@ -63,7 +63,7 @@ CPU ARM
   TASK OutputProcessingTask
   {
     AUTOSTART = FALSE;
-    PRIORITY = 4;
+    PRIORITY = 5;
     ACTIVATION = 1;
     SCHEDULE = FULL;
     STACKSIZE = 512;
@@ -74,12 +74,13 @@ CPU ARM
   TASK MonitorTask
   {
     AUTOSTART = FALSE;
-    PRIORITY = 6;
+    PRIORITY = 7;
     ACTIVATION = 1;
     SCHEDULE = FULL;
     STACKSIZE = 512;
     MESSAGE = MotorCommandMsgReceiveForMonitorTask;
     MESSAGE = MotorSensorValuesMsgReceive;
+    EVENT = DummyEvent;
   };
 
   TASK MotorSensorTask
@@ -88,7 +89,7 @@ CPU ARM
     {
       APPMODE = appmode1;
     };
-    PRIORITY = 7;
+    PRIORITY = 8;
     ACTIVATION = 1;
     SCHEDULE = FULL;
     STACKSIZE = 512;
@@ -101,7 +102,7 @@ CPU ARM
     {
       APPMODE = appmode1;
     };
-    PRIORITY = 1;
+    PRIORITY = 2;
     ACTIVATION = 1;
     SCHEDULE = FULL;
     STACKSIZE = 512;
@@ -201,8 +202,9 @@ CPU ARM
      FILTER = ALWAYS;
     };
     
-    NOTIFICATION = ACTIVATETASK {
-     TASK = MonitorTask;
+    NOTIFICATION = SETEVENT {
+      EVENT = DummyEvent;
+      TASK  = MonitorTask;
     };
     
   };
@@ -229,7 +231,7 @@ CPU ARM
     };
           
     NOTIFICATION = SETEVENT {
-      EVENT = PlaceHolderEvent;
+      EVENT = DummyEvent;
       TASK  = DataProcessingTask;
     };
 

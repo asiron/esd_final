@@ -18,6 +18,12 @@
 #define UPPER_SONAR_BOUND 28
 #define LOWER_SONAR_BOUND 10
 
+#define LOWER_SPEED_BOUND 50
+#define LOWER_REV_BOUND 50
+#define LOWER_ACC_BOUND 10
+
+#define NUMBER_OF_EXECUTIONS 20
+
 DeclareCounter(SysTimerCnt);
 
 DeclareAlarm(SonarSensorTaskTrigger);
@@ -53,7 +59,6 @@ int current_left_brake  = 0;
 int current_right_brake = 0;
 INT32 current_sonar_sensor = 0;
 
-
 int vali_id = 0;
 int sensor_id = 0;
 
@@ -65,7 +70,17 @@ int valid_failed_counter = 0;
 
 int difference = 0;
 
+int monitor_counter = 0;
+
 char debug_message[32];
+
+int count_difference_left  = 0;
+int count_difference_right = 0;
+
+int speed_difference_left  = 0;
+int speed_difference_right = 0;
+
+int cancel_alarm_counter = 0;
 
 /* nxtOSEK hook to be invoked from an ISR in category 2 */
 void user_1ms_isr_type2(void)
@@ -97,7 +112,7 @@ TASK(SonarSensorTask)
 
 	static UINT32 unique_id = 0;
 
-	UINT32 sonar_sensor_value = ecrobot_get_sonar_sensor(SONAR_SENSOR_PORT);
+	INT32 sonar_sensor_value = ecrobot_get_sonar_sensor(SONAR_SENSOR_PORT);
 	current_sonar_sensor = sonar_sensor_value;
 
 	send_sonar_sensor_message(SonarSensorValueMsgSendForDataValidationTask, sonar_sensor_value, unique_id);
@@ -165,6 +180,9 @@ TASK(OutputProcessingTask)
 
 	RecieveMessage(MotorCommandMsgReceiveForOutputProcessingTask, &message);
 
+	current_left_motor_speed  = message.left_motor;
+	current_right_motor_speed = message.right_motor;
+
 	nxt_motor_set_speed(LEFT_MOTOR_PORT, message.left_motor, message.left_motor_break);
 	nxt_motor_set_speed(RIGHT_MOTOR_PORT, message.right_motor, message.right_motor_break);
 
@@ -175,6 +193,64 @@ TASK(OutputProcessingTask)
 
 TASK(MonitorTask)
 {
+
+	static int before_n_executions_left_count = 0;
+	static int after_n_executions_left_count  = 0;
+
+	static int before_n_executions_right_count = 0;
+	static int after_n_executions_right_count  = 0;
+
+	static int before_n_executions_left_speed  = 0;
+	static int before_n_executions_right_speed = 0;
+
+	static int after_n_executions_left_speed  = 0;
+	static int after_n_executions_right_speed = 0;
+
+	static int execution_number = 0;
+
+	MOTOR_SENSOR_MSG motor_sensor_message;
+	RecieveMessage(MotorSensorValuesMsgReceive, &motor_sensor_message);
+	
+	MOTOR_COMMAND_MSG motor_command_message;
+	RecieveMessage(MotorCommandMsgReceiveForMonitorTask, &motor_command_message);
+
+	UINT8 left_motor_speed  = motor_command_message.left_motor;
+	UINT8 right_motor_speed = motor_command_message.right_motor;
+
+	execution_number++;
+	execution_number %= NUMBER_OF_EXECUTIONS;
+
+	if (execution_number == 0)
+	{
+		// Speed difference
+
+		before_n_executions_left_speed  = after_n_executions_left_speed;
+		before_n_executions_right_speed = after_n_executions_right_speed;
+
+		after_n_executions_left_speed  = motor_command_message.left_motor;
+		after_n_executions_right_speed = motor_command_message.right_motor;
+
+		speed_difference_left  = abs(after_n_executions_left_speed  - before_n_executions_left_speed);
+		speed_difference_right = abs(after_n_executions_right_speed - before_n_executions_right_speed);
+
+		// Count difference
+
+		before_n_executions_right_count = after_n_executions_right_count;
+		before_n_executions_left_count  = after_n_executions_left_count;
+
+		after_n_executions_left_count  = motor_sensor_message.left_motor_count;
+		after_n_executions_right_count = motor_sensor_message.right_motor_count;
+
+		count_difference_right = after_n_executions_right_count - before_n_executions_right_count;
+		count_difference_left  = after_n_executions_left_count  - before_n_executions_left_count;	
+
+		if ( ((left_motor_speed  > LOWER_SPEED_BOUND) && (count_difference_left  < LOWER_REV_BOUND) && (speed_difference_left  < LOWER_ACC_BOUND)) ||
+			 ((right_motor_speed > LOWER_SPEED_BOUND) && (count_difference_right < LOWER_REV_BOUND) && (speed_difference_right < LOWER_ACC_BOUND)) )
+		{
+			//cancel_alarm_counter++;
+			CancelAlarm(SonarSensorTaskTrigger);
+		}
+	}
 
 	TerminateTask();
 }
@@ -194,29 +270,42 @@ TASK(MotorSensorTask)
 TASK(LCDTask)
 {
 	display_clear(0);
+
 	//disp(0, "Left speed ", current_left_motor_speed);
 	//disp(1, "Left brake ", current_left_brake);
 	//disp(2, "Right speed ", current_right_motor_speed);
 	//disp(3, "Right brake ", current_right_brake);
 
-	disp(0, "Diff", difference);
+	// Difference between unique id's
+	//disp(0, "Diff", difference);
 
-	disp(1, "Acq pass", acq_passes);
-	disp(2, "Valid pass", validation_passes);
-	disp(3, "Process pass", processing_passes);
+	disp(0, "L Count", count_difference_left);
+	disp(1, "R Count", count_difference_right);
+
+	disp(2, "L speed ", current_left_motor_speed);
+	disp(3, "R speed ", current_right_motor_speed);
+
+	// disp(1, "Acq pass", acq_passes);
+	// disp(2, "Valid pass", validation_passes);
+	// disp(3, "Process pass", processing_passes);
 
 	disp(4, "Sonar ", current_sonar_sensor);
-	// disp(5, "Left count ", current_left_motor_count);
-	// disp(6, "Right count ", current_right_motor_count);
+	
+	disp(5, "L SDiff", speed_difference_left);
+	disp(6, "R SDiff", speed_difference_right);
+
+	//disp(5, "L count ", current_left_motor_count);
+	//disp(6, "R count ", current_right_motor_count);
 
 	// disp(5, "Sensor ID ", sensor_id);
 	// disp(6, "Valid ID ", vali_id);
 
-	disp(5, "Vali cnt ", valid_failed_counter);
-	// disp(6, "Valid ID ", vali_id);
+	//disp(7, "Vali count ", valid_failed_counter);
+	disp(7, "Cancel ", cancel_alarm_counter);
+//	disp(6, "monitor cnt", monitor_counter);
 
 
-	disp_string(7, debug_message);
+//	disp_string(7, debug_message);
 	display_update();
 	TerminateTask();
 }
